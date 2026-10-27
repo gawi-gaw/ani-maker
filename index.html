@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>애니메이션 메이커</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Pako & UPNG.js for Animated APNG encoding -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+  <!-- GIF.js for GIF encoding -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+    /* Checkerboard Pattern for Canvas Transparency */
+    .checkerboard {
+      background-color: #ffffff;
+      background-image: 
+        linear-gradient(45deg, #cbd5e1 25%, transparent 25%), 
+        linear-gradient(-45deg, #cbd5e1 25%, transparent 25%), 
+        linear-gradient(45deg, transparent 75%, #cbd5e1 75%), 
+        linear-gradient(-45deg, transparent 75%, #cbd5e1 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    }
+    input[type=range] {
+      accent-color: #ec4899;
+    }
+    .preset-btn.active {
+      border-color: #ec4899 !important;
+      background-color: #fce7f3 !important;
+      color: #be185d !important;
+      box-shadow: 0 2px 8px rgba(236, 72, 153, 0.2);
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-pink-500 to-rose-400 flex items-center justify-center text-white text-xl shadow-md shadow-pink-200">
+          ✨
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">애니메이션 메이커</h1>
+          <p class="text-xs text-slate-500 hidden sm:block">SD 이미지 사용 추천</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content 2-Column Desktop Grid -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+    <!-- Column 1 (Left / Controls Panel) -->
+    <div class="lg:col-span-7 flex flex-col gap-5">
+      
+      <!-- Upload Card -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <h2 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-cloud-arrow-up text-pink-500"></i> 이미지 업로드
+        </h2>
+        
+        <!-- Dropzone (Shown when no image or default) -->
+        <div id="drop-zone" class="border-2 border-dashed border-slate-300 hover:border-pink-400 hover:bg-pink-50/50 transition-colors rounded-xl p-5 text-center cursor-pointer flex flex-col items-center justify-center group">
+          <input type="file" id="image-input" accept="image/png, image/jpeg, image/webp" class="hidden" />
+          <div class="w-10 h-10 rounded-full bg-pink-100 text-pink-500 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+            <i class="fa-solid fa-image text-lg"></i>
+          </div>
+          <p class="text-xs font-semibold text-slate-700">PNG / JPG / WEBP 파일 드래그 또는 클릭하여 업로드</p>
+        </div>
+
+        <!-- Thumbnail Info Box (Shown after user uploads custom image) -->
+        <div id="thumbnail-box" class="hidden mt-3 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 checkerboard rounded-lg border border-slate-200 p-1 flex items-center justify-center overflow-hidden flex-shrink-0">
+              <img id="thumb-img" src="" class="max-w-full max-h-full object-contain">
+            </div>
+            <div>
+              <p id="thumb-name" class="text-xs font-bold text-slate-800 line-clamp-1">filename.png</p>
+              <p id="thumb-dim" class="text-[11px] text-slate-500 mt-0.5">0 x 0 px</p>
+              <span class="inline-block mt-1 text-[10px] font-semibold text-pink-600 bg-pink-50 px-2 py-0.5 rounded-md">이미지 업로드됨</span>
+            </div>
+          </div>
+          <button onclick="resetToDefaultImage()" class="text-slate-400 hover:text-rose-500 p-2 rounded-lg hover:bg-rose-50 transition-colors" title="다른 이미지로 변경">
+            <i class="fa-solid fa-arrow-rotate-left"></i>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- 12 Presets Grid Card (UNTOUCHED PRESETS) -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-pink-500"></i> 모션 프리셋
+          </h2>
+        </div>
+        <div id="preset-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <!-- Dynamically populated presets -->
+        </div>
+      </div>
+
+      <!-- Detail Parameter Sliders -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <h2 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-pink-500"></i> 세부 파라미터 조정
+        </h2>
+
+        <!-- Squash & Stretch -->
+        <div>
+          <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+            <span>찌그러짐 / 늘어남 (Squash & Stretch)</span>
+            <span id="squash-val" class="text-pink-600 font-bold">25%</span>
+          </div>
+          <input type="range" id="squash-range" min="0" max="70" value="25" class="w-full">
+        </div>
+
+        <!-- Bounce Height -->
+        <div>
+          <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+            <span>상하 바운스 높이 (Bounce Height)</span>
+            <span id="bounce-val" class="text-pink-600 font-bold">22px</span>
+          </div>
+          <input type="range" id="bounce-range" min="0" max="80" value="22" class="w-full">
+        </div>
+
+        <!-- Tilt / Wobble -->
+        <div>
+          <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+            <span>회전 흔들림 (Rotation Tilt)</span>
+            <span id="tilt-val" class="text-pink-600 font-bold">3°</span>
+          </div>
+          <input type="range" id="tilt-range" min="0" max="45" value="3" class="w-full">
+        </div>
+
+        <hr class="border-slate-100 my-2">
+
+        <h2 class="text-sm font-bold text-slate-800 mb-1 flex items-center gap-2">
+          <i class="fa-solid fa-clock text-pink-500"></i> 타이밍 및 재생 속도
+        </h2>
+
+        <!-- Speed / Frequency -->
+        <div>
+          <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+            <span>애니메이션 속도 (Speed multiplier)</span>
+            <span id="speed-val" class="text-pink-600 font-bold">1.2x</span>
+          </div>
+          <input type="range" id="speed-range" min="0.3" max="3.0" step="0.1" value="1.2" class="w-full">
+        </div>
+
+        <!-- Frame Rate (FPS) -->
+        <div>
+          <div class="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+            <span>초당 프레임 수 (FPS)</span>
+            <span id="fps-val" class="text-pink-600 font-bold">24 FPS</span>
+          </div>
+          <input type="range" id="fps-range" min="12" max="30" value="24" class="w-full">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Column 2 (Right / Sticky Preview & Export Panel) -->
+    <div class="lg:col-span-5 flex flex-col gap-5 lg:sticky lg:top-20">
+      
+      <!-- Live Canvas Preview Card -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col items-center">
+        <div class="w-full flex items-center justify-between mb-3">
+          <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-pink-100 text-pink-800">
+            <span class="w-2 h-2 rounded-full bg-pink-500 mr-1.5 animate-pulse"></span>미리보기
+          </span>
+          <span id="canvas-dim-badge" class="text-[11px] font-mono font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+            320 x 320 px
+          </span>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="checkerboard rounded-xl p-3 shadow-inner border border-slate-300 flex items-center justify-center overflow-hidden max-w-full w-full min-h-[300px]">
+          <canvas id="preview-canvas" width="320" height="320" class="max-w-full h-auto object-contain"></canvas>
+        </div>
+
+        <div class="w-full mt-3 flex items-center justify-between text-xs text-slate-500 px-1">
+          <span><i class="fa-solid fa-arrows-spin mr-1 text-pink-500"></i>무한 루프 재생 중</span>
+          <span id="status-info" class="text-slate-400">원본 이미지 로드됨</span>
+        </div>
+      </div>
+
+      <!-- Export Settings & Buttons Card -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <h2 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+          <i class="fa-solid fa-download text-pink-500"></i> 출력 해상도 및 배경 설정
+        </h2>
+
+        <!-- Resolution Selector -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">출력 해상도 설정</label>
+          <select id="size-select" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-medium text-slate-700 focus:outline-none focus:border-pink-500">
+            <option value="auto">원본</option>
+            <option value="256">256 x 256</option>
+            <option value="320" selected>320 x 320</option>
+            <option value="512">512 x 512</option>
+            <option value="800">800 x 800</option>
+          </select>
+        </div>
+
+        <!-- Common Background Mode Selection (GIF & APNG) -->
+        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+          <label class="block text-xs font-bold text-slate-700">배경색 설정</label>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <label class="flex items-center justify-center gap-2 p-2 rounded-lg border border-slate-200 bg-white cursor-pointer hover:border-pink-400 has-[:checked]:border-pink-500 has-[:checked]:bg-pink-50/60 transition-all">
+              <input type="radio" name="export-bg-mode" value="transparent" checked class="text-pink-600 focus:ring-pink-500">
+              <span class="text-xs font-medium text-slate-800">투명 배경</span>
+            </label>
+            <label class="flex items-center justify-center gap-2 p-2 rounded-lg border border-slate-200 bg-white cursor-pointer hover:border-pink-400 has-[:checked]:border-pink-500 has-[:checked]:bg-pink-50/60 transition-all">
+              <input type="radio" name="export-bg-mode" value="white" class="text-pink-600 focus:ring-pink-500">
+              <span class="text-xs font-medium text-slate-800">흰색 배경</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <!-- APNG Download Button -->
+          <button id="export-apng-btn" onclick="exportAPNG()" class="py-3 px-3 bg-pink-600 hover:bg-pink-700 active:bg-pink-800 text-white text-xs font-bold rounded-xl shadow-md transition-all flex flex-col items-center justify-center gap-1">
+            <div class="flex items-center gap-1.5">
+              <i class="fa-solid fa-file-image"></i>
+              <span>APNG 저장</span>
+            </div>
+          </button>
+
+          <!-- GIF Download Button -->
+          <button id="export-gif-btn" onclick="exportGIF()" class="py-3 px-3 bg-slate-800 hover:bg-slate-900 active:bg-black text-white text-xs font-bold rounded-xl shadow-md transition-all flex flex-col items-center justify-center gap-1">
+            <div class="flex items-center gap-1.5">
+              <i class="fa-solid fa-film"></i>
+              <span>GIF 저장</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- Render Progress Bar -->
+        <div id="progress-container" class="hidden mt-3 p-3 bg-pink-50 border border-pink-200 rounded-xl">
+          <div class="flex justify-between items-center text-xs font-semibold text-pink-800 mb-1">
+            <span id="progress-text">프레임 인코딩 중...</span>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="w-full bg-pink-200 h-2 rounded-full overflow-hidden">
+            <div id="progress-bar" class="bg-pink-600 h-full w-0 transition-all duration-150"></div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white text-xs font-medium px-4 py-3 rounded-xl shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-2">
+    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toast-msg">메시지</span>
+  </div>
+
+  <script>
+    // Exact 12 Presets Array
+    const PRESETS = [
+      { id: 'poyo', name: '✨ 뽀잉뽀잉', squash: 25, bounce: 22, tilt: 3, speed: 1.2, anchor: 'bottom', type: 'poyo' },
+      { id: 'heartbeat', name: '💓 두근두근', squash: 20, bounce: 0, tilt: 0, speed: 1.8, anchor: 'center', type: 'heartbeat' },
+      { id: 'curious', name: '🧐 갸웃갸웃', squash: 8, bounce: 4, tilt: 18, speed: 1.0, anchor: 'center', type: 'curious' },
+      { id: 'floating', name: '☁️ 둥실둥실', squash: 8, bounce: 28, tilt: 5, speed: 0.8, anchor: 'center', type: 'floating' },
+      { id: 'hop', name: '🐾 깡충깡충', squash: 20, bounce: 30, tilt: 8, speed: 1.3, anchor: 'bottom', type: 'hop' },
+      { id: 'sway', name: '🍃 살랑살랑', squash: 5, bounce: 2, tilt: 16, speed: 0.8, anchor: 'bottom', type: 'sway' },
+      { id: 'stomp', name: '💥 쿵덕쿵덕', squash: 35, bounce: 38, tilt: 0, speed: 1.1, anchor: 'bottom', type: 'stomp' },
+      { id: 'gooey', name: '🍡 쭈욱쭈욱', squash: 45, bounce: 12, tilt: 2, speed: 0.9, anchor: 'bottom', type: 'gooey' },
+      { id: 'groove', name: '🪩 둠칫둠칫', squash: 15, bounce: 10, tilt: 12, speed: 1.4, anchor: 'bottom', type: 'groove' },
+      { id: 'breathing', name: '🌬️ 심호흡', squash: 10, bounce: 2, tilt: 0, speed: 0.6, anchor: 'bottom', type: 'breathing' },
+      { id: 'startled', name: '🙀 깜짝', squash: 38, bounce: 45, tilt: 10, speed: 1.2, anchor: 'bottom', type: 'startled' },
+      { id: 'jiggle', name: '⚡호들갑', squash: 18, bounce: 8, tilt: 12, speed: 2.2, anchor: 'center', type: 'jiggle' }
+    ];
+
+    let currentPreset = PRESETS[0];
+    let loadedImage = null;
+    let animFrameId = null;
+    let startTime = performance.now();
+
+    // DOM Elements
+    const canvas = document.getElementById('preview-canvas');
+    const ctx = canvas.getContext('2d');
+    const dropZone = document.getElementById('drop-zone');
+    const imageInput = document.getElementById('image-input');
+    const thumbnailBox = document.getElementById('thumbnail-box');
+    const thumbImg = document.getElementById('thumb-img');
+    const thumbName = document.getElementById('thumb-name');
+    const thumbDim = document.getElementById('thumb-dim');
+    const presetGrid = document.getElementById('preset-grid');
+    const sizeSelect = document.getElementById('size-select');
+    const canvasDimBadge = document.getElementById('canvas-dim-badge');
+    const statusInfo = document.getElementById('status-info');
+
+    // Controls DOM
+    const squashRange = document.getElementById('squash-range');
+    const bounceRange = document.getElementById('bounce-range');
+    const tiltRange = document.getElementById('tilt-range');
+    const speedRange = document.getElementById('speed-range');
+    const fpsRange = document.getElementById('fps-range');
+
+    const squashVal = document.getElementById('squash-val');
+    const bounceVal = document.getElementById('bounce-val');
+    const tiltVal = document.getElementById('tilt-val');
+    const speedVal = document.getElementById('speed-val');
+    const fpsVal = document.getElementById('fps-val');
+
+    // Progress DOM
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const progressPercent = document.getElementById('progress-percent');
+
+    // Sliders Event Handlers
+    squashRange.addEventListener('input', e => squashVal.textContent = `${e.target.value}%`);
+    bounceRange.addEventListener('input', e => bounceVal.textContent = `${e.target.value}px`);
+    tiltRange.addEventListener('input', e => tiltVal.textContent = `${e.target.value}°`);
+    speedRange.addEventListener('input', e => speedVal.textContent = `${e.target.value}x`);
+    fpsRange.addEventListener('input', e => fpsVal.textContent = `${e.target.value} FPS`);
+
+    sizeSelect.addEventListener('change', () => {
+      updateCanvasDimensions();
+    });
+
+    function updateCanvasDimensions() {
+      let targetW = 320;
+      let targetH = 320;
+
+      const val = sizeSelect.value;
+      if (val === 'auto' && loadedImage) {
+        const maxDim = 512;
+        const aspect = loadedImage.width / loadedImage.height;
+        if (aspect >= 1) {
+          targetW = Math.min(loadedImage.width, maxDim);
+          targetH = Math.round(targetW / aspect);
+        } else {
+          targetH = Math.min(loadedImage.height, maxDim);
+          targetW = Math.round(targetH * aspect);
+        }
+      } else if (val !== 'auto') {
+        targetW = parseInt(val);
+        targetH = parseInt(val);
+      }
+
+      canvas.width = targetW;
+      canvas.height = targetH;
+      canvasDimBadge.textContent = `${targetW} x ${targetH} px`;
+    }
+
+    // Render 12 Preset Buttons Grid
+    function renderPresetButtons() {
+      presetGrid.innerHTML = '';
+      PRESETS.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = `preset-btn text-left p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 transition-all flex flex-col justify-between ${p.id === currentPreset.id ? 'active' : ''}`;
+        btn.onclick = () => selectPreset(p);
+        btn.innerHTML = `
+          <span class="text-xs font-bold text-slate-800 pointer-events-none">${p.name}</span>
+        `;
+        presetGrid.appendChild(btn);
+      });
+    }
+
+    function selectPreset(preset) {
+      currentPreset = preset;
+      squashRange.value = preset.squash;
+      bounceRange.value = preset.bounce;
+      tiltRange.value = preset.tilt;
+      speedRange.value = preset.speed;
+
+      squashRange.dispatchEvent(new Event('input'));
+      bounceRange.dispatchEvent(new Event('input'));
+      tiltRange.dispatchEvent(new Event('input'));
+      speedRange.dispatchEvent(new Event('input'));
+
+      renderPresetButtons();
+      showToast(`'${preset.name}' 프리셋 적용`);
+    }
+
+    // Drag and Drop Upload Setup
+    dropZone.addEventListener('click', () => imageInput.click());
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-pink-500', 'bg-pink-50');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('border-pink-500', 'bg-pink-50');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-pink-500', 'bg-pink-50');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    imageInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    function handleFile(file) {
+      if (!file.type.startsWith('image/')) {
+        showToast('이미지 파일만 업로드 가능합니다.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          loadedImage = img;
+          
+          // Update Thumbnail UI Box
+          thumbImg.src = event.target.result;
+          thumbName.textContent = file.name;
+          thumbDim.textContent = `${img.width} x ${img.height} px`;
+          thumbnailBox.classList.remove('hidden');
+
+          statusInfo.textContent = `${img.width}x${img.height}px (${file.name})`;
+          updateCanvasDimensions();
+          showToast('이미지가 업로드 되었습니다.');
+          if (!animFrameId) {
+            startTime = performance.now();
+            animate();
+          }
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function resetToDefaultImage() {
+      imageInput.value = '';
+      thumbnailBox.classList.add('hidden');
+      createDefaultPlaceholder();
+      showToast('기본 예시 캐릭터로 변경되었습니다.');
+    }
+
+    // Fallback Bear Graphics
+    function createDefaultPlaceholder() {
+      const pCanvas = document.createElement('canvas');
+      pCanvas.width = 240;
+      pCanvas.height = 240;
+      const pCtx = pCanvas.getContext('2d');
+      
+      pCtx.fillStyle = '#fb7185';
+      pCtx.beginPath();
+      pCtx.arc(60, 60, 25, 0, Math.PI * 2);
+      pCtx.arc(180, 60, 25, 0, Math.PI * 2);
+      pCtx.fill();
+
+      pCtx.fillStyle = '#fce7f3';
+      pCtx.beginPath();
+      pCtx.arc(60, 60, 12, 0, Math.PI * 2);
+      pCtx.arc(180, 60, 12, 0, Math.PI * 2);
+      pCtx.fill();
+
+      pCtx.fillStyle = '#f472b6';
+      pCtx.beginPath();
+      pCtx.arc(120, 130, 80, 0, Math.PI * 2);
+      pCtx.fill();
+
+      pCtx.fillStyle = '#ffffff';
+      pCtx.beginPath();
+      pCtx.ellipse(120, 145, 28, 20, 0, 0, Math.PI * 2);
+      pCtx.fill();
+
+      pCtx.fillStyle = '#1e293b';
+      pCtx.beginPath();
+      pCtx.arc(90, 120, 9, 0, Math.PI * 2);
+      pCtx.arc(150, 120, 9, 0, Math.PI * 2);
+      pCtx.fill();
+
+      pCtx.fillStyle = '#ffffff';
+      pCtx.beginPath();
+      pCtx.arc(88, 117, 3.5, 0, Math.PI * 2);
+      pCtx.arc(148, 117, 3.5, 0, Math.PI * 2);
+      pCtx.fill();
+
+      pCtx.fillStyle = '#be185d';
+      pCtx.beginPath();
+      pCtx.arc(120, 137, 6, 0, Math.PI * 2);
+      pCtx.fill();
+
+      pCtx.fillStyle = '#fda4af';
+      pCtx.globalAlpha = 0.6;
+      pCtx.beginPath();
+      pCtx.arc(75, 140, 12, 0, Math.PI * 2);
+      pCtx.arc(165, 140, 12, 0, Math.PI * 2);
+      pCtx.fill();
+
+      const img = new Image();
+      img.onload = () => {
+        loadedImage = img;
+        statusInfo.textContent = '기본 예시 캐릭터 (240x240px)';
+        updateCanvasDimensions();
+        startTime = performance.now();
+        animate();
+      };
+      img.src = pCanvas.toDataURL();
+    }
+
+    // Transform Calculation for 12 Presets
+    function getTransformAtProgress(progress) {
+      const sVal = parseFloat(squashRange.value) / 100;
+      const bVal = parseFloat(bounceRange.value);
+      const tVal = (parseFloat(tiltRange.value) * Math.PI) / 180;
+      const p = progress * Math.PI * 2;
+
+      let scaleX = 1;
+      let scaleY = 1;
+      let translateY = 0;
+      let rotation = 0;
+      let anchor = currentPreset.anchor || 'bottom';
+
+      switch(currentPreset.type) {
+        case 'poyo':
+          scaleX = 1 + Math.sin(p) * (sVal * 0.7);
+          scaleY = 1 - Math.sin(p) * (sVal * 0.7);
+          translateY = -Math.abs(Math.sin(p)) * bVal;
+          rotation = Math.sin(p) * (tVal * 0.3);
+          break;
+
+        case 'heartbeat':
+          const heartScale = Math.pow(Math.sin(p), 4);
+          scaleX = 1 + heartScale * sVal;
+          scaleY = 1 + heartScale * sVal;
+          translateY = -heartScale * (bVal * 0.3);
+          break;
+
+        case 'curious':
+          rotation = Math.sin(p) * tVal;
+          scaleX = 1 + Math.cos(p * 2) * (sVal * 0.2);
+          scaleY = 1 - Math.cos(p * 2) * (sVal * 0.2);
+          translateY = -Math.abs(Math.sin(p * 2)) * (bVal * 0.2);
+          break;
+
+        case 'floating':
+          translateY = (1 - Math.cos(p)) * -0.5 * bVal; 
+          scaleX = 1 + Math.sin(p) * (sVal * 0.4);
+          scaleY = 1 - Math.sin(p) * (sVal * 0.4);
+          rotation = Math.sin(p) * (tVal * 0.5);
+          break;
+
+        case 'hop':
+          const doubleHop = Math.abs(Math.sin(p * 2));
+          translateY = -doubleHop * bVal;
+          scaleX = 1 - doubleHop * (sVal * 0.3);
+          scaleY = 1 + doubleHop * (sVal * 0.4);
+          rotation = Math.sin(p) * tVal;
+          break;
+
+        case 'sway':
+          rotation = Math.sin(p) * tVal;
+          scaleX = 1 + (1 - Math.cos(p * 2)) * (sVal * 0.15);
+          scaleY = 1 - (1 - Math.cos(p * 2)) * (sVal * 0.15);
+          translateY = -Math.abs(Math.sin(p)) * (bVal * 0.15);
+          break;
+
+        case 'stomp':
+          const sinStomp = Math.sin(p);
+          if (sinStomp > 0) {
+            translateY = -sinStomp * bVal;
+            scaleX = 1 - sinStomp * (sVal * 0.3);
+            scaleY = 1 + sinStomp * (sVal * 0.5);
+          } else {
+            translateY = 0;
+            scaleX = 1 + Math.abs(sinStomp) * (sVal * 0.7);
+            scaleY = 1 - Math.abs(sinStomp) * (sVal * 0.6);
+          }
+          break;
+
+        case 'gooey':
+          const elastic = Math.sin(p);
+          scaleX = 1 - elastic * (sVal * 0.5);
+          scaleY = 1 + elastic * (sVal * 0.8);
+          translateY = -Math.max(0, elastic) * bVal;
+          rotation = Math.sin(p) * (tVal * 0.2);
+          break;
+
+        case 'groove':
+          const step = Math.sin(p);
+          rotation = step * tVal;
+          scaleX = 1 + Math.abs(step) * (sVal * 0.3);
+          scaleY = 1 - Math.abs(step) * (sVal * 0.2);
+          translateY = -Math.abs(Math.sin(p * 2)) * (bVal * 0.4);
+          break;
+
+        case 'breathing':
+          const breath = (1 - Math.cos(p)) * 0.5;
+          scaleX = 1 + breath * (sVal * 0.4);
+          scaleY = 1 + breath * (sVal * 0.6);
+          translateY = -breath * (bVal * 0.15);
+          break;
+
+        case 'startled':
+          const k = Math.sin(p);
+          if (k < 0) {
+            scaleX = 1 + Math.abs(k) * (sVal * 0.6);
+            scaleY = 1 - Math.abs(k) * (sVal * 0.5);
+            translateY = 0;
+            rotation = 0;
+          } else {
+            scaleX = 1 - k * (sVal * 0.4);
+            scaleY = 1 + k * (sVal * 0.9);
+            translateY = -k * bVal * 1.2;
+            rotation = Math.sin(p * 2) * tVal;
+          }
+          break;
+
+        case 'jiggle':
+          rotation = Math.sin(p * 3) * tVal;
+          scaleX = 1 + Math.sin(p * 4) * (sVal * 0.4);
+          scaleY = 1 - Math.cos(p * 4) * (sVal * 0.4);
+          translateY = -Math.abs(Math.sin(p * 2)) * (bVal * 0.3);
+          break;
+
+        default:
+          scaleX = 1 + Math.sin(p) * sVal;
+          scaleY = 1 - Math.sin(p) * sVal;
+          translateY = -Math.abs(Math.sin(p)) * bVal;
+      }
+
+      return { scaleX, scaleY, translateY, rotation, anchor };
+    }
+
+    // Render single frame
+    function renderFrame(targetCtx, canvasWidth, canvasHeight, progress, fillWhite = false) {
+      targetCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      if (fillWhite) {
+        targetCtx.fillStyle = '#FFFFFF';
+        targetCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+      }
+
+      if (!loadedImage) return;
+
+      const { scaleX, scaleY, translateY, rotation, anchor } = getTransformAtProgress(progress);
+
+      targetCtx.save();
+
+      let cx = canvasWidth / 2;
+      let cy = canvasHeight / 2;
+
+      if (anchor === 'bottom') {
+        cy = canvasHeight * 0.82;
+      }
+
+      targetCtx.translate(cx, cy + translateY);
+      targetCtx.rotate(rotation);
+      targetCtx.scale(scaleX, scaleY);
+
+      const aspect = loadedImage.width / loadedImage.height;
+      let drawW = canvasWidth * 0.6;
+      let drawH = drawW / aspect;
+
+      if (drawH > canvasHeight * 0.6) {
+        drawH = canvasHeight * 0.6;
+        drawW = drawH * aspect;
+      }
+
+      if (anchor === 'bottom') {
+        targetCtx.drawImage(loadedImage, -drawW / 2, -drawH, drawW, drawH);
+      } else {
+        targetCtx.drawImage(loadedImage, -drawW / 2, -drawH / 2, drawW, drawH);
+      }
+
+      targetCtx.restore();
+    }
+
+    // Live preview loop
+    function animate() {
+      const speed = parseFloat(speedRange.value);
+      const now = performance.now();
+      const elapsedSeconds = (now - startTime) / 1000;
+      
+      const cycleTime = 1.0 / speed;
+      const progress = (elapsedSeconds % cycleTime) / cycleTime;
+
+      renderFrame(ctx, canvas.width, canvas.height, progress, false);
+
+      animFrameId = requestAnimationFrame(animate);
+    }
+
+    // Frame Generator Helper
+    function generateFrameCanvases(bgWhite = false) {
+      const fps = parseInt(fpsRange.value);
+      const numFrames = Math.max(12, Math.round(fps * (1.0 / parseFloat(speedRange.value))));
+      
+      let width = canvas.width;
+      let height = canvas.height;
+
+      const frameCanvases = [];
+      const frameCanvas = document.createElement('canvas');
+      frameCanvas.width = width;
+      frameCanvas.height = height;
+      const fCtx = frameCanvas.getContext('2d', { willReadFrequently: true });
+
+      for (let i = 0; i < numFrames; i++) {
+        const progress = i / numFrames;
+        renderFrame(fCtx, width, height, progress, bgWhite);
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(frameCanvas, 0, 0);
+        frameCanvases.push(tempCanvas);
+      }
+
+      return { frameCanvases, fps, numFrames, delayMs: Math.round(1000 / fps), width, height };
+    }
+
+    // Animated APNG Export (Fix for real .png animation)
+    async function exportAPNG() {
+      if (!loadedImage) return;
+
+      const bgMode = document.querySelector('input[name="export-bg-mode"]:checked').value;
+      const isWhiteBg = (bgMode === 'white');
+
+      showProgress('APNG 애니메이션 인코딩 중...', 10);
+      
+      setTimeout(async () => {
+        try {
+          const { frameCanvases, numFrames, delayMs, width, height } = generateFrameCanvases(isWhiteBg);
+          const imgBuffers = [];
+          const delays = [];
+
+          for (let i = 0; i < numFrames; i++) {
+            const fCanvas = frameCanvases[i];
+            const fCtx = fCanvas.getContext('2d');
+            const imgData = fCtx.getImageData(0, 0, width, height);
+            
+            // Extract Raw RGBA Uint8Array ArrayBuffer
+            imgBuffers.push(imgData.data.buffer);
+            delays.push(delayMs);
+
+            const percent = Math.round(((i + 1) / numFrames) * 80);
+            showProgress('APNG 압축 및 생성 중...', 10 + percent);
+          }
+
+          // UPNG.encode(bufs, w, h, cnum, delays) -> returns ArrayBuffer of true animated APNG
+          const apngBuffer = UPNG.encode(imgBuffers, width, height, 0, delays);
+          const blob = new Blob([apngBuffer], { type: 'image/png' });
+
+          downloadBlob(blob, `poyo_${currentPreset.id}_anim.png`);
+          hideProgress();
+          showToast('APNG 저장 완료!');
+        } catch (err) {
+          console.error('APNG Export Error:', err);
+          hideProgress();
+          showToast('APNG 변환 실패');
+        }
+      }, 50);
+    }
+
+    // Animated GIF Export (Supports both transparent & white BG)
+    async function exportGIF() {
+      if (!loadedImage) return;
+
+      const bgMode = document.querySelector('input[name="export-bg-mode"]:checked').value;
+      const isWhiteBg = (bgMode === 'white');
+
+      showProgress('GIF 인코더 준비 중...', 5);
+
+      setTimeout(() => {
+        try {
+          const { frameCanvases, numFrames, delayMs, width, height } = generateFrameCanvases(isWhiteBg);
+
+          const gifOptions = {
+            workers: 2,
+            quality: 10,
+            width: width,
+            height: height,
+            workerScript: URL.createObjectURL(new Blob([`
+              importScripts('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js');
+            `], { type: 'application/javascript' }))
+          };
+
+          if (!isWhiteBg) {
+            gifOptions.transparent = 0x000000;
+          } else {
+            gifOptions.background = '#FFFFFF';
+          }
+
+          const gif = new GIF(gifOptions);
+
+          for (let i = 0; i < numFrames; i++) {
+            const fCanvas = frameCanvases[i];
+            const fCtx = fCanvas.getContext('2d');
+            
+            // In Transparent mode for GIF, convert soft transparent pixels to hard threshold
+            if (!isWhiteBg) {
+              const imgData = fCtx.getImageData(0, 0, width, height);
+              const data = imgData.data;
+              for (let j = 0; j < data.length; j += 4) {
+                if (data[j + 3] < 128) {
+                  data[j + 3] = 0;
+                } else {
+                  data[j + 3] = 255;
+                }
+              }
+              fCtx.putImageData(imgData, 0, 0);
+            }
+
+            gif.addFrame(fCtx, { copy: true, delay: delayMs });
+          }
+
+          gif.on('progress', (p) => {
+            const percent = Math.round(p * 100);
+            showProgress('GIF 인코딩 및 팔레트 렌더링 중...', percent);
+          });
+
+          gif.on('finished', (blob) => {
+            hideProgress();
+            downloadBlob(blob, `poyo_${currentPreset.id}_anim.gif`);
+            showToast('GIF 저장 완료!');
+          });
+
+          gif.render();
+
+        } catch (err) {
+          console.error('GIF Export Error:', err);
+          hideProgress();
+          showToast('GIF 변환 실패');
+        }
+      }, 50);
+    }
+
+    // Download File Trigger
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Progress & Toast Handlers
+    function showProgress(text, percent) {
+      progressContainer.classList.remove('hidden');
+      progressText.textContent = text;
+      progressPercent.textContent = `${percent}%`;
+      progressBar.style.width = `${percent}%`;
+    }
+
+    function hideProgress() {
+      progressContainer.classList.add('hidden');
+      progressBar.style.width = '0%';
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-msg');
+      toastMsg.textContent = message;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 2600);
+    }
+
+    // Window Onload Init
+    window.onload = () => {
+      renderPresetButtons();
+      createDefaultPlaceholder();
+    };
+  </script>
+</body>
+</html>
